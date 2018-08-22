@@ -10,6 +10,7 @@
 #import "BMGlobalEventManager.h"
 #import "BMConfigManager.h"
 #import "BMMediatorManager.h"
+#import "BMNotifactionCenter.h"
 
 // iOS10 及以上需导入 UserNotifications.framework
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_10_0
@@ -43,7 +44,7 @@
     dispatch_once(&onceToken, ^{
         _instance = [[BMPushMessageManager alloc] init];
     });
-    
+
     return _instance;
 }
 
@@ -68,7 +69,7 @@
 
 /**
  解析push消息、透传消息
- 
+
  @param userInfo 消息体
  */
 - (void)analysisRemoteNotification:(NSDictionary *)userInfo
@@ -77,7 +78,7 @@
         [[self class] addPushNotification:userInfo];
         return;
     }
-    
+
     [BMGlobalEventManager pushMessage:userInfo appLaunchedByNotification:self.isLaunchedByNotification];
 }
 
@@ -98,7 +99,7 @@
     /*
      警告：Xcode8 需要手动开启"TARGETS -> Capabilities -> Push Notifications"
      */
-    
+
     /*
      警告：该方法需要开发者自定义，以下代码根据 APP 支持的 iOS 系统不同，代码可以对应修改。
      以下为演示代码，注意根据实际需要修改，注意测试支持的 iOS 系统都能获取到 DeviceToken
@@ -112,7 +113,7 @@
                 WXLogInfo(@"request authorization succeeded!");
             }
         }];
-        
+
         [[UIApplication sharedApplication] registerForRemoteNotifications];
 #else // Xcode 7编译会调用
         UIUserNotificationType types = (UIUserNotificationTypeAlert | UIUserNotificationTypeSound | UIUserNotificationTypeBadge);
@@ -134,11 +135,15 @@
 
 - (void)GeTuiSdkDidRegisterClient:(NSString *)clientId
 {
+     NSDictionary *info = @{@"clientId":clientId};
+
+    [[BMNotifactionCenter defaultCenter] emit:@"getCid" info:info];
+
     /* 将cid保存 */
     _cid = clientId;
-    
+
     WXLogInfo(@"GE TUI CID:%@",clientId);
-    
+
     if (_deviceToken) {
         [GeTuiSdk registerDeviceToken:_deviceToken];
     }
@@ -168,11 +173,11 @@
     if (payloadData) {
         payloadMsg = [[NSString alloc] initWithBytes:payloadData.bytes length:payloadData.length encoding:NSUTF8StringEncoding];
     }
-    
+
     if (offLine || !payloadMsg || payloadMsg.length == 0) {
         return;
     }
-    
+
     /* 解析消息内容 */
     NSData *data = [payloadMsg dataUsingEncoding:NSUTF8StringEncoding];
     NSDictionary *dic = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingAllowFragments error:nil];
@@ -180,7 +185,7 @@
     data = [payloadStr dataUsingEncoding:NSUTF8StringEncoding];
     dic = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingAllowFragments error:nil];
     [self analysisRemoteNotification:dic];
-    
+
 }
 
 #pragma mark - System Delegate & DataSource
@@ -189,32 +194,32 @@
 
 //  iOS 10: App在前台获取到通知
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center willPresentNotification:(UNNotification *)notification withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
-    
+
     WXLogInfo(@"willPresentNotification：%@", notification.request.content.userInfo);
-    
+
     NSDictionary *userInfo = notification.request.content.userInfo;
-    
+
     [self analysisRemoteNotification:userInfo];
-    
+
     // [ GTSdk ]：将收到的APNs信息传给个推统计
     [GeTuiSdk handleRemoteNotification:userInfo];
-    
+
     // 根据APP需要，判断是否要提示用户Badge、Sound、Alert
 //    completionHandler(UNNotificationPresentationOptionBadge | UNNotificationPresentationOptionSound | UNNotificationPresentationOptionAlert);
 }
 
 //  iOS 10: 点击通知进入App时触发，在该方法内统计有效用户点击数
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center didReceiveNotificationResponse:(UNNotificationResponse *)response withCompletionHandler:(void (^)())completionHandler {
-    
+
     WXLogInfo(@"didReceiveNotification：%@", response.notification.request.content.userInfo);
-    
+
     NSDictionary *userInfo = response.notification.request.content.userInfo;
-    
+
     [self analysisRemoteNotification:userInfo];
-    
+
     // [ GTSdk ]：将收到的APNs信息传给个推统计
     [GeTuiSdk handleRemoteNotification:userInfo];
-    
+
     completionHandler();
 }
 
@@ -228,9 +233,9 @@
                          appKey:info[@"appKey"]?:@""
                       appSecret:info[@"appSecret"]?:@""
                        delegate:self];
-    
+
 //    [GeTuiSdk runBackgroundEnable:YES];
-    
+
     [self registerRemoteNotification];
 }
 
@@ -239,7 +244,7 @@
     NSString *token = [[deviceToken description] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
     [BMPushMessageManager shareInstance]->_deviceToken = [token stringByReplacingOccurrencesOfString:@" " withString:@""];
     WXLogInfo(@"deviceToken:%@", [BMPushMessageManager shareInstance]->_deviceToken);
-    
+
     // [3]:向个推服务器注册deviceToken
     [GeTuiSdk registerDeviceToken:[BMPushMessageManager shareInstance]->_deviceToken];
 }
@@ -253,7 +258,7 @@
 + (void)receiveRemoteNotification:(NSDictionary *)userInfo fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler
 {
     [[BMPushMessageManager shareInstance] analysisRemoteNotification:userInfo];
-    
+
     // 将收到的APNs信息传给个推统计
     [GeTuiSdk handleRemoteNotification:userInfo];
     completionHandler(UIBackgroundFetchResultNewData);
@@ -267,7 +272,7 @@
 + (void)addPushNotification:(NSDictionary *)pushMessage
 {
     [BMPushMessageManager shareInstance]->_pushMessage = pushMessage;
-    
+
     [[NSNotificationCenter defaultCenter] addObserver:[BMPushMessageManager shareInstance] selector:@selector(firstScreenDidFinished:) name:BMFirstScreenDidFinish object:nil];
 }
 
