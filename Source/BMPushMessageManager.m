@@ -181,9 +181,9 @@
     /* 解析消息内容 */
     NSData *data = [payloadMsg dataUsingEncoding:NSUTF8StringEncoding];
     NSDictionary *dic = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingAllowFragments error:nil];
-    NSString *payloadStr = dic[@"payload"];
-    data = [payloadStr dataUsingEncoding:NSUTF8StringEncoding];
-    dic = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingAllowFragments error:nil];
+    //NSString *payloadStr = dic[@"payload"];
+    //data = [payloadStr dataUsingEncoding:NSUTF8StringEncoding];
+    //dic = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingAllowFragments error:nil];
     [self analysisRemoteNotification:dic];
 
 }
